@@ -1,39 +1,53 @@
-
-const express = require('express');
+// jshint esversion:6
+const express = require("express");
 const router = express.Router();
-const Admin = require('../models/admin');
-const Tenant = require('../models/tenant');
+const Admin = require("../models/admin");
+const Tenant = require("../models/tenant");
+const bcrypt = require("bcrypt");
 
-router.get('/', (req, res) => {
-    res.render('login', { viewTitle: "Login" });
+// Render combined login page
+router.get("/", (req, res) => {
+    res.render("login"); // This should show dropdown for tenant/admin
 });
 
-router.post('/login', async (req, res) => {
+// Handle combined login logic
+router.post("/login", async (req, res) => {
     const { userType, userid, password } = req.body;
 
-    if (userType === 'admin') {
-        if (userid == 9999 && password === 'pass') {
-            req.session.admin = true;
-            return res.redirect('/admin/home');
-        } else {
-            return res.status(401).send("Invalid admin credentials.");
-        }
-    }
+    try {
+        if (userType === "admin") {
+            if (userid == 9999 && password === "pass") {
+                req.session.loggedIn = true;
+                req.session.userType = "admin";
+                return res.redirect("/admin/home");
+            } else {
+                return res.status(401).send("Invalid admin credentials");
+            }
+        } else if (userType === "tenant") {
+            const tenant = await Tenant.findOne({ tenantid: userid });
+            if (!tenant) return res.status(404).send("Tenant not found");
 
-    if (userType === 'tenant') {
-        try {
-            const tenant = await Tenant.findOne({ tenantid: userid, tenantpassword: password });
-            if (!tenant) return res.status(401).send("Invalid tenant credentials.");
+            const match = await bcrypt.compare(password, tenant.tenantpassword);
+            if (!match) return res.status(401).send("Invalid tenant credentials");
+
             req.session.loggedIn = true;
+            req.session.userType = "tenant";
             req.session.tenantId = tenant.tenantid;
-            return res.redirect('/tenant/dashboard');
-        } catch (err) {
-            console.error(err);
-            return res.status(500).send("Server error");
-        }
-    }
+            req.session.tenantName = tenant.firstname || "Tenant";
 
-    res.status(400).send("Invalid user type.");
+            return res.redirect("/tenant/dashboard");
+        } else {
+            return res.status(400).send("Unknown user type");
+        }
+    } catch (err) {
+        console.error("Login error:", err);
+        res.status(500).send("Internal server error");
+    }
 });
+
+router.get('/about', (req, res) => {
+    res.render('about', { layout: 'layout' }); // optional layout line if you're explicitly using it
+});
+
 
 module.exports = router;

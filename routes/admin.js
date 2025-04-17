@@ -1,131 +1,156 @@
-//jshint esversion:6
-const express = require('express');
+// jshint esversion:6
+const express = require("express");
 const router = express.Router();
+const path = require("path");
+const nodemailer = require("nodemailer");
 
-const Admin = require('../models/admin');
-const Tenant = require('../models/tenant');
-const Property = require('../models/property');
-const Registration = require('../models/registration');
-const Loan = require('../models/loan');
-const Testimonial = require('../models/testimonial');
-const Transaction = require('../models/transaction');
-const Cancellation = require('../models/cancellation');
-const nodemailer = require('nodemailer');
+const Admin = require("../models/admin");
+const Tenant = require("../models/tenant");
+const Property = require("../models/property");
+const Registration = require("../models/registration");
+const Loan = require("../models/loan");
+const Testimonial = require("../models/testimonial");
+const Transaction = require("../models/transaction");
+const Cancellation = require("../models/cancellation");
 
-// LOGIN
-router.get('/login', (req, res) => {
-  res.sendFile(__dirname + '/../views/alogin.html');
-});
-router.post('/login', (req, res) => {
-  const { adminid, password } = req.body;
-  if (adminid == 9999 && password === 'pass') {
-    res.redirect('/admin/home');
-  } else {
-    res.status(401).send('Invalid credentials');
-  }
-});
-
-// HOME (Dashboard)
-router.get('/home', (req, res) => {
-  res.render('admin/home', { viewTitle: 'Admin Dashboard' });
-});
-
-// MODELS MAPPING
 const models = {
-  tenant: Tenant,
-  property: Property,
-  registration: Registration,
-  loan: Loan,
-  testimonial: Testimonial,
-  transaction: Transaction,
-  cancellation: Cancellation,
+    tenant: Tenant,
+    property: Property,
+    registration: Registration,
+    loan: Loan,
+    testimonial: Testimonial,
+    transaction: Transaction,
+    cancellation: Cancellation,
 };
 
 const ids = {
-  tenant: 6110,
-  property: 3110,
-  loan: 5110,
-  transaction: 7110,
-  cancellation: 8110,
+    tenant: 6110,
+    property: 3110,
+    loan: 5110,
+    transaction: 7110,
+    testimonial: 6210,
+    cancellation: 8110,
+    registration: 4110
 };
 
-// ADD + UPDATE FORM ROUTES
-Object.keys(models).forEach((key) => {
-  const Model = models[key];
-  const cap = capitalize(key);
-
-  // Render Add Form
-  router.get(`/home/add${key}`, (req, res) => {
-    res.render(`admin/${key}`, { viewTitle: `Add ${cap}` });
-  });
-
-  // Render Update Form
-  router.get(`/home/${key}update/:id`, async (req, res) => {
-    const doc = await Model.findById(req.params.id).lean();
-    res.render(`admin/${key}`, {
-      viewTitle: `Update ${cap}`,
-      [key]: doc,
-    });
-  });
-
-  // List Route
-  router.get(`/home/${key}list`, async (req, res) => {
-    const list = await Model.find({}).lean();
-    res.render(`admin/${key}list`, { list });
-  });
-
-  // Delete Route
-  router.get(`/home/${key}delete/:id`, async (req, res) => {
-    await Model.findByIdAndRemove(req.params.id);
-    res.redirect(`/admin/home/${key}list`);
-  });
-
-  // Post Submit
-  router.post(`/${key}sub`, async (req, res) => {
-    const isUpdate = req.body._id && req.body._id.trim() !== '';
-    try {
-      if (isUpdate) {
-        await Model.findByIdAndUpdate(req.body._id, req.body, { new: true });
-      } else {
-        const instance = new Model(req.body);
-        if (ids[key]) {
-          instance[`${key}id`] = ++ids[key];
-        }
-        await instance.save();
-      }
-      res.redirect(`/admin/home/${key}list`);
-    } catch (err) {
-      if (err.name === 'ValidationError') {
-        handleValidationError(err, req.body);
-        res.render(`admin/${key}`, {
-          viewTitle: isUpdate ? `Update ${cap}` : `Add ${cap}`,
-          [key]: req.body,
-        });
-      } else {
-        console.error(err);
-        res.status(500).send('Server Error');
-      }
+// --- Admin Auth Middleware ---
+function isAdmin(req, res, next) {
+    if (req.session && req.session.loggedIn && req.session.userType === 'admin') {
+        return next();
     }
+    res.redirect('/');
+}
+
+// --- Admin Dashboard ---
+router.get("/home", (req, res) => {
+  res.render("admin/home", {
+      viewTitle: "Admin Dashboard",
+      layout: false // <-- This disables wrapping with the main layout.hbs
   });
 });
 
-// Helper Functions
-function handleValidationError(err, body) {
-  for (let field in err.errors) {
-    body[field + 'Error'] = err.errors[field].message;
-  }
-}
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
+
+router.get("/login", (req, res) => {
+  res.render("admin/alogin", { layout: false }); // No layout, since this is a full page on its own
+});
+
+
+router.post("/login", (req, res) => {
+    const { adminid, password } = req.body;
+    if (adminid == 9999 && password === "pass") {
+        req.session.loggedIn = true;
+        req.session.userType = "admin";
+        res.redirect("/admin/home");
+    } else {
+        res.status(401).send("Invalid admin credentials");
+    }
+});
+
+// --- Logout ---
+router.get("/logout", (req, res) => {
+    req.session.destroy(err => {
+        if (err) console.error("Logout error:", err);
+        res.redirect("/admin/login");
+    });
+});
+
+// --- Form Routes (Add & Update) ---
+Object.keys(models).forEach((key) => {
+    router.get(`/home/add${key}`, isAdmin, (req, res) => {
+        res.render(`admin/${key}`, { viewTitle: `Add ${capitalize(key)}` });
+    });
+
+    router.get(`/home/${key}update/:id`, isAdmin, async (req, res) => {
+        const doc = await models[key].findById(req.params.id).lean();
+        res.render(`admin/${key}`, { viewTitle: `Update ${capitalize(key)}`, [key]: doc });
+    });
+
+    router.get(`/home/${key}list`, isAdmin, async (req, res) => {
+        const list = await models[key].find({}).lean();
+        res.render(`admin/${key}list`, { list });
+    });
+
+    router.get(`/home/${key}delete/:id`, isAdmin, async (req, res) => {
+        await models[key].findByIdAndRemove(req.params.id);
+        res.redirect(`/admin/home/${key}list`);
+    });
+});
+
+// --- POST Routes (submit) ---
+router.post('/tenantsub', async (req, res) => await handleSubmit('tenant', req, res));
+router.post('/propertysub', async (req, res) => await handleSubmit('property', req, res));
+router.post('/loansub', async (req, res) => await handleSubmit('loan', req, res));
+router.post('/testimonialsub', async (req, res) => await handleSubmit('testimonial', req, res));
+router.post('/transactionsub', async (req, res) => await handleSubmit('transaction', req, res));
+router.post('/cancellationsub', async (req, res) => await handleSubmit('cancellation', req, res));
+router.post('/registrationsub', async (req, res) => await handleSubmit('registration', req, res));
+
+// --- Helper Functions ---
+async function handleSubmit(type, req, res) {
+    const Model = models[type];
+    const view = `admin/${type}`;
+    const isUpdate = req.body._id && req.body._id.trim() !== '';
+
+    try {
+        if (isUpdate) {
+            await Model.findByIdAndUpdate(req.body._id, req.body, { new: true });
+        } else {
+            const doc = new Model({ ...req.body });
+            if (ids[type]) doc[`${type}id`] = ++ids[type];
+            await doc.save();
+        }
+        res.redirect(`/admin/home/${type}list`);
+    } catch (err) {
+        if (err.name === 'ValidationError') {
+            handleValidationError(err, req.body);
+            res.render(view, {
+                viewTitle: isUpdate ? `Update ${capitalize(type)}` : `Add ${capitalize(type)}`,
+                [type]: req.body
+            });
+        } else {
+            console.error(`Error saving ${type}:`, err);
+            res.status(500).send("Server error");
+        }
+    }
 }
 
-// OPTIONAL: Nodemailer setup (if needed for confirmation mails)
+function handleValidationError(err, body) {
+    for (const field in err.errors) {
+        body[field + "Error"] = err.errors[field].message;
+    }
+}
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// --- Optional: Email Setup ---
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'nandupanakanti@gmail.com',
-    pass: 'MomDad@123',
-  },
+    service: 'gmail',
+    auth: {
+        user: 'nandupanakanti@gmail.com',
+        pass: 'MomDad@123' // move to .env in production
+    }
 });
 
 module.exports = router;
