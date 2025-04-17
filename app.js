@@ -32,6 +32,8 @@ app.engine('hbs', exphbs.engine({
         }
     }
 }));
+console.log("Layout dir:", path.join(__dirname, 'views/layouts'));
+
 app.set('view engine', 'hbs');
 app.set('views', path.join(__dirname, 'views'));
 
