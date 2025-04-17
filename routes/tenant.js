@@ -4,25 +4,25 @@ const path = require("path");
 const bcrypt = require("bcrypt");
 const router = express.Router();
 
-const tenant = require('../controllers/tenant.controller');
-const Registration = require('../models/registration');
-const Tenant = require('../models/tenant');
+const tenant = require("../controllers/tenant.controller");
+const Registration = require("../models/registration");
+const Tenant = require("../models/tenant");
 
-// Middleware to protect tenant-only routes
+// Middleware: Require tenant login
 const isAuthenticated = (req, res, next) => {
     if (req.session && req.session.loggedIn) {
-        next();
-    } else {
-        res.redirect('/tenant/login/form');
+        return next();
     }
+    res.redirect("/tenant/login/form");
 };
 
-// ----------- AUTH ROUTES ------------
+// --- AUTH ROUTES ---
 
-// Render login form (GET)
+// GET: Login form
 router.get("/login/form", (req, res) => {
     const error = req.session.loginError;
     req.session.loginError = null;
+
     res.render("tenant/login", {
         layout: false,
         viewTitle: "Tenant Login",
@@ -30,26 +30,28 @@ router.get("/login/form", (req, res) => {
     });
 });
 
-// Handle login (POST)
+// POST: Login
 router.post("/login", async (req, res) => {
     const { tenantid, password } = req.body;
+
     try {
         const user = await Tenant.findOne({ tenantid });
+
         if (!user) {
             req.session.loginError = "Tenant not found.";
-            return res.redirect('/tenant/login/form');
+            return res.redirect("/tenant/login/form");
         }
 
         const match = await bcrypt.compare(password, user.tenantpassword);
         if (!match) {
             req.session.loginError = "Invalid credentials.";
-            return res.redirect('/tenant/login/form');
+            return res.redirect("/tenant/login/form");
         }
 
-        // Store login info in session
+        // Store session info
         req.session.loggedIn = true;
         req.session.tenantId = user._id;
-        req.session.tenantName = user.firstname || 'Tenant';
+        req.session.tenantName = user.firstname || "Tenant";
         req.session.tenantEmail = user.email;
 
         res.redirect("/tenant/dashboard");
@@ -59,21 +61,22 @@ router.post("/login", async (req, res) => {
     }
 });
 
-// Logout route
+// GET: Logout
 router.get("/logout", (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            console.error("Logout error:", err);
-        }
+    req.session.destroy((err) => {
+        if (err) console.error("Logout error:", err);
         res.redirect("/tenant/login/form");
     });
 });
 
-// ----------- TENANT DASHBOARD ------------
+// --- TENANT DASHBOARD ---
 
-router.get('/dashboard', isAuthenticated, async (req, res) => {
+router.get("/dashboard", isAuthenticated, async (req, res) => {
     try {
-        const properties = await Registration.find({ email: req.session.tenantEmail || '' }).lean();
+        const properties = await Registration.find({
+            email: req.session.tenantEmail || ""
+        }).lean();
+
         res.render("tenant/dashboard", {
             tenant: {
                 name: req.session.tenantName || "Tenant"
@@ -86,42 +89,39 @@ router.get('/dashboard', isAuthenticated, async (req, res) => {
     }
 });
 
-// ----------- REGISTRATION ROUTES ------------
+// --- TENANT REGISTRATION ---
 
-// Render tenant registration form
 router.get("/register", tenant.register);
-
-// Handle registration form submission
 router.post("/regsub", tenant.regsub);
 
-// ----------- PROPERTY REGISTRATION ------------
+// --- PROPERTY REGISTRATION ---
 
-router.get('/property-registration', isAuthenticated, (req, res) => {
-    res.render('tenant/propertyregistration', {
+router.get("/property-registration", isAuthenticated, (req, res) => {
+    res.render("tenant/propertyregistration", {
         tenantName: req.session.tenantName
     });
 });
 
-router.post('/registrationsub', isAuthenticated, (req, res) => {
-    let registration = new Registration();
+router.post("/registrationsub", isAuthenticated, (req, res) => {
+    const registration = new Registration({
+        propertyId: req.body.number,
+        propertyName: req.body.propertyName,
+        address: req.body.address,
+        mobile: req.body.mobile,
+        alternateMobile: req.body.alternateMobile,
+        email: req.body.email,
+        description: req.body.description || '',
+        registrationDate: Date.now(),
+        registrationStatus: "Pending",
+        annualIncome: req.body.annualIncome
+    });
 
-    registration.propertyId = req.body.number;
-    registration.propertyName = req.body.propertyName;
-    registration.address = req.body.address;
-    registration.mobile = req.body.mobile;
-    registration.alternateMobile = req.body.alternateMobile;
-    registration.email = req.body.email;
-    registration.description = req.body.description || '';
-    registration.registrationDate = Date.now();
-    registration.registrationStatus = 'Pending';
-    registration.annualIncome = req.body.annualIncome;
-
-    registration.save(function (err) {
+    registration.save((err) => {
         if (!err) {
             console.log("Saved registration to DB");
-            res.redirect('/tenant/dashboard');
+            res.redirect("/tenant/dashboard");
         } else {
-            console.log('Error during record insertion:', err);
+            console.error("Error during record insertion:", err);
             res.status(500).send("Error saving registration details.");
         }
     });

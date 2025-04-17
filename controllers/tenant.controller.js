@@ -1,19 +1,15 @@
 // jshint esversion:6
-const express = require("express");
-const path = require("path");
 const Tenant = require("../models/tenant");
 const bcrypt = require("bcrypt");
-const router = express.Router();
 
 // Render registration form
 function register(req, res) {
     res.render("tenant/register", {
-        layout: 'layout', // Use main layout
         viewTitle: "Tenant Registration Form"
     });
 }
 
-// Handle tenant registration (create or update)
+// Handle registration
 async function regsub(req, res) {
     try {
         const tenantData = {
@@ -27,10 +23,6 @@ async function regsub(req, res) {
             annualincome: req.body.annualincome,
             address: req.body.address
         };
-
-        if (req.body.tenantpassword && req.body.tenantpassword.trim() !== "") {
-            tenantData.tenantpassword = await bcrypt.hash(req.body.tenantpassword, 10);
-        }
 
         if (req.body._id && req.body._id.trim() !== "") {
             await Tenant.findByIdAndUpdate(req.body._id, tenantData);
@@ -47,48 +39,25 @@ async function regsub(req, res) {
 
         res.redirect("/tenant/login/form");
     } catch (err) {
-        console.error("Error saving tenant:", err.message || err);
-        res.status(500).send("An error occurred while saving the tenant.");
+        console.error("Error during tenant registration:", err.message);
+        res.status(500).send("An error occurred during registration.");
     }
 }
 
-// Handle tenant login
-async function login(req, res) {
-    const { tenantid, password } = req.body;
-
-    try {
-        const tenant = await Tenant.findOne({ tenantid });
-
-        if (!tenant) {
-            return res.status(404).send("Tenant not found. Please register first.");
-        }
-
-        const match = await bcrypt.compare(password, tenant.tenantpassword);
-
-        if (match) {
-            req.session.loggedIn = true;
-            req.session.tenantId = tenant._id;
-            return res.redirect('/tenant/property-registration');
-        } else {
-            res.status(401).send("Invalid credentials. Please try again.");
-        }
-    } catch (err) {
-        console.error("Error during login:", err.message || err);
-        res.status(500).send("An error occurred. Please try again.");
-    }
-}
-
-// Render login form
+// Render login page
 function loginGet(req, res) {
+    const error = req.session.loginError;
+    req.session.loginError = null;
+
     res.render("tenant/login", {
-        layout: 'layout', //  Use main layout
-        viewTitle: "Tenant Login"
+        viewTitle: "Tenant Login",
+        error
     });
 }
 
+// Export all
 module.exports = {
     register,
     regsub,
-    login,
     loginGet
 };

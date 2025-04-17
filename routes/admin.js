@@ -42,18 +42,17 @@ function isAdmin(req, res, next) {
 }
 
 // --- Admin Dashboard ---
-router.get("/home", (req, res) => {
-  res.render("admin/home", {
-      viewTitle: "Admin Dashboard",
-      layout: false // <-- This disables wrapping with the main layout.hbs
-  });
+router.get("/home", isAdmin, (req, res) => {
+    res.render("admin/home", {
+        viewTitle: "Admin Dashboard",
+        layout: false
+    });
 });
 
-
+// --- Admin Login ---
 router.get("/login", (req, res) => {
-  res.render("admin/alogin", { layout: false }); // No layout, since this is a full page on its own
+    res.render("admin/alogin", { layout: false });
 });
-
 
 router.post("/login", (req, res) => {
     const { adminid, password } = req.body;
@@ -66,7 +65,7 @@ router.post("/login", (req, res) => {
     }
 });
 
-// --- Logout ---
+// --- Admin Logout ---
 router.get("/logout", (req, res) => {
     req.session.destroy(err => {
         if (err) console.error("Logout error:", err);
@@ -74,29 +73,41 @@ router.get("/logout", (req, res) => {
     });
 });
 
-// --- Form Routes (Add & Update) ---
+// --- Admin About Page ---
+router.get("/home/about", isAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, "about.html"));
+});
+
+// --- Form Routes (Add, Edit, List, Delete) ---
 Object.keys(models).forEach((key) => {
+    // Add form
     router.get(`/home/add${key}`, isAdmin, (req, res) => {
         res.render(`admin/${key}`, { viewTitle: `Add ${capitalize(key)}` });
     });
 
+    // Update form
     router.get(`/home/${key}update/:id`, isAdmin, async (req, res) => {
         const doc = await models[key].findById(req.params.id).lean();
-        res.render(`admin/${key}`, { viewTitle: `Update ${capitalize(key)}`, [key]: doc });
+        res.render(`admin/${key}`, {
+            viewTitle: `Update ${capitalize(key)}`,
+            [key]: doc
+        });
     });
 
+    // List view
     router.get(`/home/${key}list`, isAdmin, async (req, res) => {
         const list = await models[key].find({}).lean();
         res.render(`admin/${key}list`, { list });
     });
 
+    // Delete
     router.get(`/home/${key}delete/:id`, isAdmin, async (req, res) => {
         await models[key].findByIdAndRemove(req.params.id);
         res.redirect(`/admin/home/${key}list`);
     });
 });
 
-// --- POST Routes (submit) ---
+// --- POST Submissions (Create or Update) ---
 router.post('/tenantsub', async (req, res) => await handleSubmit('tenant', req, res));
 router.post('/propertysub', async (req, res) => await handleSubmit('property', req, res));
 router.post('/loansub', async (req, res) => await handleSubmit('loan', req, res));
@@ -105,7 +116,7 @@ router.post('/transactionsub', async (req, res) => await handleSubmit('transacti
 router.post('/cancellationsub', async (req, res) => await handleSubmit('cancellation', req, res));
 router.post('/registrationsub', async (req, res) => await handleSubmit('registration', req, res));
 
-// --- Helper Functions ---
+// --- Helpers ---
 async function handleSubmit(type, req, res) {
     const Model = models[type];
     const view = `admin/${type}`;
@@ -144,12 +155,12 @@ function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// --- Optional: Email Setup ---
+// --- Email Setup (for future use, optional) ---
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: 'nandupanakanti@gmail.com',
-        pass: 'MomDad@123' // move to .env in production
+        pass: process.env.EMAIL_PASS  // move password to .env
     }
 });
 
