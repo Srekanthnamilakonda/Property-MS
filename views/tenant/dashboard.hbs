@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">  <!-- Link to your global CSS -->
+</head>
+<body>
+    <!-- Include Layout (header and footer) -->
+    {{> layout}}
+
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>Welcome, {{tenant.name}}!</h1>
+            <p>Your dashboard for managing properties and account.</p>
+        </div>
+
+        <div class="dashboard-content">
+            <!-- Display Tenant's Registered Properties -->
+            <div class="properties-section">
+                <h2>Your Registered Properties</h2>
+                {{#if properties.length}}
+                    <table class="properties-table">
+                        <thead>
+                            <tr>
+                                <th>Property Name</th>
+                                <th>Location</th>
+                                <th>Price</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{#each properties}}
+                                <tr>
+                                    <td>{{this.name}}</td>
+                                    <td>{{this.location}}</td>
+                                    <td>${{this.price}}</td>
+                                    <td>
+                                        <a href="/property/edit/{{this._id}}" class="btn-edit">Edit</a>
+                                        <a href="/property/delete/{{this._id}}" class="btn-delete">Delete</a>
+                                    </td>
+                                </tr>
+                            {{/each}}
+                        </tbody>
+                    </table>
+                {{else}}
+                    <p>You have no properties registered yet. Start by adding your first property.</p>
+                {{/if}}
+            </div>
+
+            <!-- Option to Register a New Property -->
+            <div class="register-property">
+                <h2>Register a New Property</h2>
+                <p>Click the button below to register a new property.</p>
+                <a href="/property/register" class="btn-register">Register Property</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Footer -->
+    <footer>
+        <p>&copy; 2024 Property Management. All rights reserved.</p>
+    </footer>
+</body>
+</html>
