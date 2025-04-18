@@ -9,7 +9,7 @@ function register(req, res) {
     });
 }
 
-// Handle registration
+// Handle registration or update
 async function regsub(req, res) {
     try {
         const tenantData = {
@@ -24,10 +24,15 @@ async function regsub(req, res) {
             address: req.body.address
         };
 
+        // Check for update
         if (req.body._id && req.body._id.trim() !== "") {
+            if (req.body.tenantpassword && req.body.tenantpassword.trim() !== "") {
+                tenantData.tenantpassword = await bcrypt.hash(req.body.tenantpassword, 10);
+            }
             await Tenant.findByIdAndUpdate(req.body._id, tenantData);
             console.log("Updated tenant:", req.body._id);
         } else {
+            // Create new tenant
             const lastTenant = await Tenant.findOne().sort({ tenantid: -1 });
             tenantData.tenantid = lastTenant ? lastTenant.tenantid + 1 : 1110;
             tenantData.tenantpassword = await bcrypt.hash(req.body.tenantpassword, 10);
@@ -44,18 +49,19 @@ async function regsub(req, res) {
     }
 }
 
-// Render login page
+// Render login form
 function loginGet(req, res) {
     const error = req.session.loginError;
     req.session.loginError = null;
 
     res.render("tenant/login", {
+        layout: false,
         viewTitle: "Tenant Login",
         error
     });
 }
 
-// Export all
+// Export all controller methods
 module.exports = {
     register,
     regsub,
